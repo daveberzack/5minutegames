@@ -1,29 +1,22 @@
 import './Login.css';
-import { useEffect, useState } from 'react';
-import { signUpWithEmail, signInWithEmail, checkForReturningUser } from '../../utils/firebase';
+import { useState } from 'react';
+import { useData } from '../../utils/DataContext';
 
 function Login({setIsUserLoaded}) {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
-    useEffect( ()=> {
-        checkReturningUser2();
-    },[])
+    const { signUpWithEmail, signInWithEmail, signOutUser, userData } = useData();
 
-    const checkReturningUser2 = async () => {
-        const user = await checkForReturningUser();
-        console.log("returning",user);
-        if (user) setIsUserLoaded(true);
-    };
-
-    const signUp = async () => {
-        const user = await signUpWithEmail(email, password);
-        if (user) setIsUserLoaded(true);
+    const signUp = () => {
+        signUpWithEmail(email, password);
     }
-    const signIn = async () => {
-        const user = await signInWithEmail(email, password);
-        if (user) setIsUserLoaded(true);
+    const signIn = () => {
+        signInWithEmail(email, password);
+    }
+    const signOut = () => {
+        signOutUser();
     }
 
     return (
@@ -45,6 +38,8 @@ function Login({setIsUserLoaded}) {
             />
             <button onClick={signUp}>Sign Up</button>
             <button onClick={signIn}>Sign In</button>
+            <button onClick={signOut}>Sign Out</button> 
+            {userData?.name || "---"}
 
 
         {/* <button onClick={()=> {signInWithGoogle(loadUserData)}}>Sign In</button>
