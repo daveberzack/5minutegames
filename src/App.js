@@ -2,6 +2,7 @@
 import {useEffect, useState} from 'react';
 import { signInWithGoogle, signOutUser, loadData } from './utils/firebase';
 import FavoriteGames from './components/FavoriteGames/FavoriteGames';
+import OtherGames from './components/OtherGames/OtherGames';
 import Login from './components/Login/Login';
 import './App.css';
 import { games } from './games';
@@ -35,7 +36,8 @@ function App() {
         5Minute.Games
       </header>
       <Login setIsUserLoaded={setIsUserLoaded}></Login>
-      <FavoriteGames favorites={favoriteGames}></FavoriteGames>
+      <FavoriteGames></FavoriteGames>
+      <OtherGames></OtherGames>
     </div>
   );
 }

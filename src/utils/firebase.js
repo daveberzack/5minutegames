@@ -22,10 +22,8 @@ let user = {};
 const checkForReturningUser = async () => {
   await onAuthStateChanged(auth, (u) => {
     if (u) {
-      console.log("User is signed in:", u);
       user = u;
     } else {
-      console.log("No user is signed in.");
     }
   });
   return user;
@@ -36,7 +34,6 @@ const signInWithGoogle = async (onComplete) => {
   try {
     const result = await signInWithPopup(auth, provider);
     user = result.user;
-    console.log("sign in user",user);
     onComplete();
   } catch (error) {
     console.error("Error signing in:", error);
@@ -56,7 +53,6 @@ const signOutUser = async () => {
 const signUpWithEmail = async (email, password) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    console.log("User signed up:", userCredential.user);
     user = userCredential.user;
     return user;
   } catch (error) {
