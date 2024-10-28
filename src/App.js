@@ -1,23 +1,41 @@
-import logo from './logo.svg';
+
+import {useEffect, useState} from 'react';
+import { signInWithGoogle, signOutUser, loadData } from './utils/firebase';
+import FavoriteGames from './components/FavoriteGames/FavoriteGames';
+import Login from './components/Login/Login';
 import './App.css';
+import { games } from './games';
 
 function App() {
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [preferences, setPreferences] = useState({});
+  const [todayPlays, setTodayPlays] = useState({});
+  const [isUserLoaded, setIsUserLoaded] = useState(false);
+
+  useEffect( ()=> {
+      loadUserData();
+  },[isUserLoaded]);
+
+  const loadUserData = async () => {
+    const userData = await loadData(today);
+    setFavoriteIds( userData.favorites );
+    setPreferences( userData.preferences );
+    setTodayPlays( userData.todayPlays );
+  };
+
+  const favoriteGames = favoriteIds?.map( id => {
+      return games.find( g => g.id == id )
+  });
   return (
     <div className="App">
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
+        5Minute.Games
       </header>
+      <Login setIsUserLoaded={setIsUserLoaded}></Login>
+      <FavoriteGames favorites={favoriteGames}></FavoriteGames>
     </div>
   );
 }
