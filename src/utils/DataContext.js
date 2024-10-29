@@ -25,6 +25,7 @@ export const DataProvider = ({ children }) => {
     const today = new Date().toISOString().split("T")[0];
 
     const [userData, setUserData] = useState(null);
+    const [gameIdPlayEditing, setGameIdPlayEditing] = useState(null);
   
     // Check user authentication state on load, and cleanup
     useEffect(() => {
@@ -56,7 +57,6 @@ export const DataProvider = ({ children }) => {
     const signUpWithEmail = async (email, password) => {
         try {
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          console.log("userCredential.user",userCredential.user);
           setUserData(userCredential.user);
         } catch (error) {
           console.error("Error signing up:", error.message);
@@ -86,8 +86,9 @@ export const DataProvider = ({ children }) => {
             newUserData = userSnap.data();
           }
           
-          //const dayRef = doc(collection(db, "users", user.uid, "plays"), today);
-          //userData.todayPlays = await dayRef.get();
+          const todayRef = doc(db, "users", userCredential.uid, "plays", today);
+          const todaySnapshot = await getDoc(todayRef);
+          newUserData.todayPlays = todaySnapshot.data();
         }
         setUserData(newUserData);
     }
@@ -129,6 +130,39 @@ export const DataProvider = ({ children }) => {
         const newFavorites = userData.favorites.filter(item => item != id);
         setFavorites(newFavorites);
     }
+
+    function setGameToEditPlay(id) {
+        setGameIdPlayEditing(id);
+    }
+
+    async function updatePlay(score, message) {
+        console.log("update play:"+score+" --- "+message);
+
+        const userCredential = auth.currentUser;
+        if (!userCredential) return;
+        try {
+            // const userDocRef = doc(db, "users", userCredential.uid);
+            // await updateDoc(userDocRef, { favorites: newFavorites });
+            const playDocRef = doc(db, "users", userCredential.uid, "plays", today);
+            await updateDoc(playDocRef, {
+                [`${gameIdPlayEditing}.score`]: score,
+                [`${gameIdPlayEditing}.message`]: message,
+              });
+            
+            const newTodayPlays = {...userData.todayPlays};
+            newTodayPlays[gameIdPlayEditing] = {score, message};
+            console.log(newTodayPlays);
+            const newUserData = { ...userData, todayPlays: newTodayPlays };
+            setUserData(newUserData);
+        } catch (error) {
+            console.error("Error updating preferences:", error);
+        }
+
+        setGameIdPlayEditing(null);
+    }
+    async function cancelEditPlay() {
+        setGameIdPlayEditing(null);
+    }
   
     return (
         <DataContext.Provider value={{ 
@@ -140,7 +174,11 @@ export const DataProvider = ({ children }) => {
             userData,
             setPreferences,
             addFavorite,
-            removeFavorite
+            removeFavorite,
+            setGameToEditPlay,
+            gameIdPlayEditing,
+            updatePlay,
+            cancelEditPlay
         }}>
             {children}
         </DataContext.Provider>
