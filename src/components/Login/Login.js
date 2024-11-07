@@ -2,16 +2,13 @@ import './Login.css';
 import { useState } from 'react';
 import { useData } from '../../utils/DataContext';
 
-function Login({setIsUserLoaded}) {
+function Login() {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
-    const { signUpWithEmail, signInWithEmail, signOutUser, userData } = useData();
+    const { signInWithEmail, signOutUser, userData } = useData();
 
-    const signUp = () => {
-        signUpWithEmail(email, password);
-    }
     const signIn = () => {
         signInWithEmail(email, password);
     }
@@ -22,28 +19,25 @@ function Login({setIsUserLoaded}) {
     return (
         <section id="login">
             <h3>Login</h3>
-            Sign up:
+            Sign in:
             <input 
-                id="signup-email" 
+                id="login-email" 
                 placeholder="email" 
                 value={email} 
                 onChange={(e)=>{ setEmail(e.target.value) }}
             />
             <input  
                 type="password"
-                id="signup-password" 
+                id="login-password" 
                 placeholder="password" 
                 value={password} 
                 onChange={(e)=>{ setPassword(e.target.value) }}
             />
-            <button onClick={signUp}>Sign Up</button>
+            <div>
             <button onClick={signIn}>Sign In</button>
-            <button onClick={signOut}>Sign Out</button> 
-            {userData?.name || "---"}
+            <button onClick={signOut}>Sign Out</button></div>
+            <p>{userData?.username || "---"}</p>
 
-
-        {/* <button onClick={()=> {signInWithGoogle(loadUserData)}}>Sign In</button>
-        <button onClick={signOutUser}>Sign Out</button> */}
         </section>
     );
 }
@@ -52,3 +46,6 @@ export default Login;
 
 
 
+
+        /* <button onClick={()=> {signInWithGoogle(loadUserData)}}>Sign In</button>
+        <button onClick={signOutUser}>Sign Out</button> */

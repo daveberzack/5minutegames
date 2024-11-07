@@ -1,63 +1,47 @@
-import { initializeApp } from "firebase/app";
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getAuth, setPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { getFirestore, doc, collection, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { games } from '../games';
+import { firebase } from './firebase';
 
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
 
 const DataContext = createContext();
 
 export const DataProvider = ({ children }) => {
-    
+
     const today = new Date().toISOString().split("T")[0];
+    firebase.init(today);
 
     const [userData, setUserData] = useState(null);
     const [gameIdPlayEditing, setGameIdPlayEditing] = useState(null);
   
-    // Check user authentication state on load, and cleanup
+    // Check user authentication state on load
     useEffect(() => {
-      const unsubscribe = auth.onAuthStateChanged((userCredential) => {
-        loadData(userCredential);
-      });
-      return () => unsubscribe();
+        return firebase.checkAutoLogin(setUserData);
     }, []);
 
     const signInWithGoogle = async (onComplete) => {
-        const provider = new GoogleAuthProvider();
         try {
-            await signInWithPopup(auth, provider);
+            await firebase.signInWithGoogle();
             onComplete();
-        } catch (error) {
-            console.error("Error signing in:", error);
+        }
+        catch  (error) {
+            console.error("Error signing in with Google:", error);
         }
     };
       
     const signOutUser = async () => {
         try {
-            await signOut(auth);
+            await firebase.signOutUser();
             setUserData(null);
         } catch (error) {
             console.error("Error signing out:", error);
         }
     };
       
-    const signUpWithEmail = async (email, password) => {
+    const signUpWithEmail = async (email, password, username, character, color) => {
         try {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          setUserData(userCredential.user);
+            const newUserData = await firebase.signUpWithEmail(email, password, username, character, color);
+            setUserData(newUserData);
         } catch (error) {
           console.error("Error signing up:", error.message);
         }
@@ -65,41 +49,16 @@ export const DataProvider = ({ children }) => {
       
     const signInWithEmail = async (email, password) => {
         try {
-          await setPersistence(auth, browserLocalPersistence);
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          loadData(userCredential.user);
+            const newUserData = await firebase.signInWithEmail(email, password);
+            setUserData(newUserData);
         } catch (error) {
-          console.error("Error signing in:", error.message);
-          throw error;
+            console.error("Error signing in:", error.message);
         }
     };
       
-    const loadData = async (userCredential) => { 
-      
-        let newUserData = null; 
-      
-        if (db && userCredential?.uid){
-          
-          const userRef = doc(db, "users", userCredential.uid);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            newUserData = userSnap.data();
-          }
-          
-          const todayRef = doc(db, "users", userCredential.uid, "plays", today);
-          const todaySnapshot = await getDoc(todayRef);
-          newUserData.todayPlays = todaySnapshot.data();
-        }
-        setUserData(newUserData);
-    }
-
     const setPreferences = async (newPreferences) => {
-        const userCredential = auth.currentUser;
-        if (!userCredential) return;
         try {
-            const userDocRef = doc(db, "users", userCredential.uid);
-            await updateDoc(userDocRef, { preferences: newPreferences });
-
+            await firebase.setPreferences(newPreferences);
             const newUserData = { ...userData, preferences: newPreferences };
             setUserData(newUserData);
         } catch (error) {
@@ -108,15 +67,12 @@ export const DataProvider = ({ children }) => {
     }
 
     const setFavorites = async (newFavorites) => {
-        const userCredential = auth.currentUser;
-        if (!userCredential) return;
         try {
-            const userDocRef = doc(db, "users", userCredential.uid);
-            await updateDoc(userDocRef, { favorites: newFavorites });
+            await firebase.setFavorites(newFavorites);
             const newUserData = { ...userData, favorites: newFavorites };
             setUserData(newUserData);
         } catch (error) {
-            console.error("Error updating preferences:", error);
+            console.error("Error updating favorites:", error);
         }
     }
 
@@ -131,6 +87,32 @@ export const DataProvider = ({ children }) => {
         setFavorites(newFavorites);
     }
 
+    const setFriends = async (newFriendIds) => {
+        try {
+            await firebase.setFriends(newFriendIds);
+            const newUserData = await firebase.loadData();
+            console.log(newUserData);
+            setUserData(newUserData);
+        } catch (error) {
+            console.error("Error updating friends:", error);
+        }
+    }
+
+    async function addFriend(username) {
+        const newFriendIds = userData.friends.map( f=> f.id );
+        const newFriend = await firebase.findUserByUsername(username);
+        if (newFriend){
+            newFriendIds.push(newFriend.id);
+            setFriends(newFriendIds);
+        }
+    }
+
+    async function removeFriend(id) {
+        const newFriends = userData.friends.filter(item => item != id);
+        const newFriendIds = newFriends.map( f=> f.id );
+        setFriends(newFriendIds);
+    }
+
     function setGameToEditPlay(id) {
         setGameIdPlayEditing(id);
     }
@@ -138,16 +120,8 @@ export const DataProvider = ({ children }) => {
     async function updatePlay(score, message) {
         console.log("update play:"+score+" --- "+message);
 
-        const userCredential = auth.currentUser;
-        if (!userCredential) return;
         try {
-            // const userDocRef = doc(db, "users", userCredential.uid);
-            // await updateDoc(userDocRef, { favorites: newFavorites });
-            const playDocRef = doc(db, "users", userCredential.uid, "plays", today);
-            await updateDoc(playDocRef, {
-                [`${gameIdPlayEditing}.score`]: score,
-                [`${gameIdPlayEditing}.message`]: message,
-              });
+            await firebase.updatePlay(gameIdPlayEditing, score, message);
             
             const newTodayPlays = {...userData.todayPlays};
             newTodayPlays[gameIdPlayEditing] = {score, message};
@@ -160,6 +134,7 @@ export const DataProvider = ({ children }) => {
 
         setGameIdPlayEditing(null);
     }
+
     async function cancelEditPlay() {
         setGameIdPlayEditing(null);
     }
@@ -175,6 +150,8 @@ export const DataProvider = ({ children }) => {
             setPreferences,
             addFavorite,
             removeFavorite,
+            addFriend,
+            removeFriend,
             setGameToEditPlay,
             gameIdPlayEditing,
             updatePlay,
