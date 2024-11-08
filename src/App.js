@@ -3,6 +3,8 @@ import OtherGames from './components/OtherGames/OtherGames';
 import Login from './components/Login/Login';
 import './App.css';
 import EditScoreForm from './components/EditScoreForm/EditScoreForm';
+import Signup from './components/Signup/Signup';
+import Friends from './components/Friends/Friends';
 
 function App() {
   
@@ -11,10 +13,12 @@ function App() {
       <header className="App-header">
         5Minute.Games
       </header>
-      <Login></Login>
       <FavoriteGames></FavoriteGames>
       <OtherGames></OtherGames>
       <EditScoreForm></EditScoreForm>
+      <Login></Login>
+      <Signup></Signup>
+      <Friends></Friends>
     </div>
   );
 }

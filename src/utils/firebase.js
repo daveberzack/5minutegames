@@ -1,98 +1,163 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, setPersistence, browserLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, connectAuthEmulator, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { getFirestore, doc, collection, setDoc, getDoc } from "firebase/firestore";
+import { getAuth, setPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
+import { getFirestore, doc, collection, setDoc, getDoc, updateDoc, query, where, getDocs } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.REACT_APP_FIREBASE_APP_ID,
+    measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+let today = "";
+let userCredential = {};
 
-let user = {};
+export const firebase = {
 
+    init: function(todayString){
+        today = todayString;
+    },
 
-const checkForReturningUser = async () => {
-  await onAuthStateChanged(auth, (u) => {
-    if (u) {
-      user = u;
-    } else {
-    }
-  });
-  return user;
-};
+    checkAutoLogin: function(setUserData){
+        console.log("auto");
+        const unsubscribe = auth.onAuthStateChanged( async (initialUserCredential) => {
+            userCredential = initialUserCredential;
+            const newUserData = await this.loadData();
+            setUserData(newUserData);
+            console.log("auto newUserData", newUserData);
+        });
+        return () => unsubscribe();
+    },
 
-const signInWithGoogle = async (onComplete) => {
-  const provider = new GoogleAuthProvider();
-  try {
-    const result = await signInWithPopup(auth, provider);
-    user = result.user;
-    onComplete();
-  } catch (error) {
-    console.error("Error signing in:", error);
-  }
-};
-
-const signOutUser = async () => {
-  try {
-    await signOut(auth);
-    return true;
-  } catch (error) {
-    console.error("Error signing out:", error);
-    return false;
-  }
-};
-
-const signUpWithEmail = async (email, password) => {
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    user = userCredential.user;
-    return user;
-  } catch (error) {
-    console.error("Error signing up:", error.message);
-  }
-};
-
-const signInWithEmail = async (email, password) => {
-  try {
-    await setPersistence(auth, browserLocalPersistence);
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    user = userCredential.user;
-    return user;
-  } catch (error) {
-    console.error("Error signing in:", error.message);
-    throw error;
-  }
-};
-
-const loadData = async (today) => { 
-
-  let userData = {
-    favorites: [],
-    preferences: {},
-    todayPlays: [] 
-  }; 
-
-  if (db && user?.uid){
+    signInWithGoogle: async function(){
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+    },
     
-    const userRef = doc(db, "users", user.uid);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      userData = userSnap.data();
+    signOutUser: async function(){
+        await signOut(auth);
+    },
+
+    signUpWithEmail: async function(email, password, username, character, color){
+        const existingUser = await this.findUserByUsername(username);
+        if (existingUser) {
+            throw(new Error("username exists"));
+        }
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        const userRef = doc(db, 'users', userCredential.user.uid); // Reference to the user's document
+        await setDoc(userRef, {
+            username: username,
+            character: character,
+            color: color,
+            favorites: [],
+            friendIds: [],
+            preferences: {
+                showOther: true
+            }
+        });
+
+        return this.loadData()
+    },
+      
+    signInWithEmail: async function(email, password){
+        await setPersistence(auth, browserLocalPersistence);
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
+        return this.loadData()
+    },
+
+    findUserByUsername: async function(username) {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('username', '==', username));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+            const userDoc = querySnapshot.docs[0];
+            return { id: userDoc.id, ...userDoc.data() };
+          } else {
+            return null;
+        }
+    },
+
+    loadData: async function(){ 
+        debugger;
+        const thisUser = userCredential?.user
+        let newUserData = null; 
+      
+        if (db && thisUser?.uid){
+            const userRef = doc(db, "users", thisUser.uid);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                newUserData = userSnap.data();
+            }
+            
+            const todayRef = doc(db, "users", thisUser.uid, "plays", today);
+            const todaySnapshot = await getDoc(todayRef);
+            newUserData.todayPlays = todaySnapshot.data() || [];
+
+            console.log("newUserData before",newUserData);
+            const friendIds = newUserData?.friendIds || [];
+            newUserData.friends = [];
+
+            for (let friendId of friendIds) {
+                const friendRef = doc(db, "users", friendId);
+                const friendSnap = await getDoc(friendRef);
+                if (friendSnap.exists()) {
+                    const friendData = friendSnap.data();
+                    newUserData.friends.push({
+                        id: friendId,
+                        username: friendData.username || '',
+                    });
+                }
+            }
+            console.log("after",newUserData);
+
+        }
+        return newUserData;
+    },
+
+    setPreferences: async function (newPreferences){
+        const userCredential = auth.currentUser;
+        if (!userCredential) throw new Error("User Not Found");
+
+        const userDocRef = doc(db, "users", userCredential.uid);
+        await updateDoc(userDocRef, { preferences: newPreferences });
+    },
+
+    setFavorites: async function(newFavorites){
+        const userCredential = auth.currentUser;
+        if (!userCredential) throw new Error("User Not Found");
+
+        const userDocRef = doc(db, "users", userCredential.uid);
+        await updateDoc(userDocRef, { favorites: newFavorites });
+    },
+
+    setFriends: async function(newFriends){
+        console.log("setFriends", newFriends);
+        const userCredential = auth.currentUser;
+        if (!userCredential) throw new Error("User Not Found");
+
+        const userDocRef = doc(db, "users", userCredential.uid);
+        await updateDoc(userDocRef, { friends: newFriends });
+    },
+
+    updatePlay: async function(gameId, score, message) {
+        const userCredential = auth.currentUser;
+        if (!userCredential) throw new Error("User Not Found");
+
+        // const userDocRef = doc(db, "users", userCredential.uid);
+        // await updateDoc(userDocRef, { favorites: newFavorites });
+        const playDocRef = doc(db, "users", userCredential.uid, "plays", today);
+        await updateDoc(playDocRef, {
+            [`${gameId}.score`]: score,
+            [`${gameId}.message`]: message,
+        });
+        
     }
-    
-    //const dayRef = doc(collection(db, "users", user.uid, "plays"), today);
-    //userData.todayPlays = await dayRef.get();
-  }
-  return userData;
-  
 }
-
-export { auth, db, signInWithGoogle, signOutUser, loadData, signUpWithEmail, signInWithEmail, checkForReturningUser };
